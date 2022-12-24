@@ -1,30 +1,30 @@
 import "bootstrap/dist/css/bootstrap.min.css";
+import "react-toastify/dist/ReactToastify.css";
+import './App.css';
 
-import { useEffect, useState } from 'react';
+import {  useState, useEffect } from 'react';
+import { ethers } from "ethers";
+import {ToastContainer, toast} from "react-toastify";
+
 import WRHeader from 'wrcomponents/dist/WRHeader';
-import WRFooter from 'wrcomponents/dist/WRFooter';
+import WRFooter, { async } from 'wrcomponents/dist/WRFooter';
 import WRInfo from 'wrcomponents/dist/WRInfo';
 import WRContent from 'wrcomponents/dist/WRContent';
 import WRTools from 'wrcomponents/dist/WRTools';
+import Button from "react-bootstrap/Button";
 
-import { ethers } from "ethers";
-
-import './App.css';
-
-import {ToastContainer, toast} from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-
+import { format6FirstsAnd6LastsChar } from "./utils";
+import meta from "./assets/metamask.png";
 
 function App() {
-  
-  function toastMessage(text) {
-    toast.info(text)  ;
-  }
-  const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
+  const [user, setUser] = useState({});
+  const [provider, setProvider] = useState();
+  const [signer, setSigner] = useState();
 
   //contract goerli testnet
-  const addressContract = '0x3059F1260795A8457f8Cf426A6cf17D12731DFca'
+  const contractAddress = '0x3059F1260795A8457f8Cf426A6cf17D12731DFca'
   //abi
   const abi = [
     {
@@ -56,79 +56,126 @@ function App() {
     }
   ];
 
-  let contractDeployed = null;
-  let contractDeployedSigner = null;
+  function toastMessage(text) {
+    toast.info(text)  ;
+  }
   
-  function getProvider(){
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    if (contractDeployed == null){
-      contractDeployed = new ethers.Contract(addressContract, abi, provider)
-      contractDeployedSigner = new ethers.Contract(addressContract, abi, provider.getSigner());
+  async function handleConnectWallet (){
+    try {
+      setLoading(true)
+      let prov =  new ethers.providers.Web3Provider(window.ethereum);
+      setProvider(prov);
+
+      let userAcc = await prov.send('eth_requestAccounts', []);
+      setUser({account: userAcc[0], connected: true});
+
+      const contrSig = new ethers.Contract(contractAddress, abi, prov.getSigner())
+      setSigner( contrSig)
+
+    } catch (error) {
+      toastMessage(error.reason)
+    } finally{
+      setLoading(false);
     }
-    return provider;
+  }
+
+    
+
+  useEffect(() => {
+    
+    async function getData() {
+      try {
+        const {ethereum} = window;
+        if (!ethereum){
+          toastMessage('Metamask not detected');
+        }
+  
+        const goerliChainId = "0x5";
+        const currentChainId = await window.ethereum.request({method: 'eth_chainId'})
+        if (goerliChainId != currentChainId){
+          toastMessage('Change to goerli testnet')
+        }    
+      } catch (error) {
+        toastMessage(error.reason)        
+      }
+      
+    }
+
+    getData()  
+    
+  }, [])
+  
+  async function isConnected(){
+    if (!user.connected){
+      toastMessage('You are not connected!')
+      return false;
+    }
+    return true;
+  }
+
+  async function handleDisconnect(){
+    try {
+      setUser({});
+      setSigner(null);
+      setProvider(null);
+    } catch (error) {
+      toastMessage(error.reason)
+    }
   }
 
   async function handleSave(){
-    getProvider();
-    const resp = await contractDeployedSigner.setName(name);
-    console.log(resp)
-    toastMessage('Name updated. Wait some seconds to get name again.')
-  }
-
-  async function connectMetaMask (){
-    if(typeof window.ethereum !== "undefined"){
-        try
-        {
-            await window.ethereum.request({ method: "eth_requestAccounts" });
-            setConnected(true)
-        }
-        catch (error) {
-            console.log(error);
-            setConnected(false)
-        }
-        const accounts = await window.ethereum.request({ method: "eth_accounts" });
-    }
-    else {
-        setConnected(false)
-        toastMessage("Conect your metamask")
+    try {
+      if (!isConnected()) {
+        return;
       }
+      setLoading(true);
+      const resp = await signer.setName(name);
+      await resp.wait();
+      toastMessage('Name updated. Thanks for waiting.')  
+    } catch (error) {
+      toastMessage(error.reason)      
+    } finally{
+      setLoading(false);
+    }
   }
-
-  async function getTokens (){
-    // const tokens = await Promisse.all{
-    //   p1, 
-    //   p2, 
-    //   p3
-    // }
-    // console.log(tokens)
-  }
-
-
+  
   async function getValue(){
-    getProvider();
-    const name = await contractDeployed.name();
-    toastMessage (`The name in blockchain is ${name}`)
+    try {
+      if (!isConnected()) {
+        return;
+      }
+      const resp = await signer.name();
+      toastMessage (`The name in blockchain is ${resp}`)  
+    } catch (error) {
+      toastMessage(error.reason)
+    }
   }
 
   return (
     <div className="App">
       <ToastContainer position="top-center" autoClose={5000}/>
-      <WRHeader title="Simple smart contract" />
-      <WRInfo chain="Goerli testnet" />
+      <WRHeader title="Simple smart contract" image={true} />
+      <WRInfo chain="Goerli" testnet={true} />
       <WRContent>
-        <span>Save your name in blockchain</span>
-        {connected ? (
-          <div className='divHorizontal'>
-            <span>Type your name below to save in blockchain</span>
-            <input type='text'value={name} onChange={(e) => setName(e.target.value)} />
-            <button onClick={handleSave}>Save in blockchain</button>
-          </div>
-          ) : (
-            <button onClick={connectMetaMask}>Conect your wallet</button>
-          )}
-        <div className='divHorizontal'>
-            <button onClick={getValue}>Get name in blockchain</button>
-        </div>
+        {loading && 
+          <h1>Loading....</h1>
+        }
+        { !user.connected ?<>
+            <Button className="commands" variant="btn btn-primary" onClick={handleConnectWallet}>
+              <img src={meta} alt="metamask" width="30px" height="30px"/>Connect to Metamask
+            </Button></>
+          : <>
+            <label>Welcome {format6FirstsAnd6LastsChar(user.account)}</label>
+            <button className="btn btn-primary commands" onClick={handleDisconnect}>Disconnect</button>
+          </>
+        }
+        <hr/>
+        <h2>Save your name in blockchain</h2>
+        <label>Type your name below to save in blockchain</label>
+        <input className="commands" type='text'value={name} onChange={(e) => setName(e.target.value)} />
+        <button className="btn btn-primary commands" onClick={handleSave}>Save in blockchain</button>        
+        <hr/>
+        <button className="btn btn-primary commands" onClick={getValue}>Get name in blockchain</button>
       </WRContent>
       <WRTools react={true} truffle={true} css={true} javascript={true} ganache={true} ethersjs={true} />
       <WRFooter />
