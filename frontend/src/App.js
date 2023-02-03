@@ -18,11 +18,12 @@ import meta from "./assets/metamask.png";
 
 function App() {
   const [loading, setLoading] = useState(false);
-  const [name, setName] = useState('');
   const [user, setUser] = useState({});
   const [provider, setProvider] = useState();
   const [signer, setSigner] = useState();
 
+  const [name, setName] = useState('');
+  
   //contract goerli testnet
   const contractAddress = '0x3059F1260795A8457f8Cf426A6cf17D12731DFca'
   //abi
@@ -56,10 +57,6 @@ function App() {
     }
   ];
 
-  function toastMessage(text) {
-    toast.info(text)  ;
-  }
-  
   async function handleConnectWallet (){
     try {
       setLoading(true)
@@ -78,8 +75,6 @@ function App() {
       setLoading(false);
     }
   }
-
-    
 
   useEffect(() => {
     
@@ -123,6 +118,10 @@ function App() {
     }
   }
 
+  function toastMessage(text) {
+    toast.info(text)  ;
+  }
+
   async function handleSave(){
     try {
       if (!isConnected()) {
@@ -157,6 +156,7 @@ function App() {
       <WRHeader title="Simple smart contract" image={true} />
       <WRInfo chain="Goerli" testnet={true} />
       <WRContent>
+
         {loading && 
           <h1>Loading....</h1>
         }
@@ -170,6 +170,7 @@ function App() {
           </>
         }
         <hr/>
+
         <h2>Save your name in blockchain</h2>
         <label>Type your name below to save in blockchain</label>
         <input className="commands" type='text'value={name} onChange={(e) => setName(e.target.value)} />
